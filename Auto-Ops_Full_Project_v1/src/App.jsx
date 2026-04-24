@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Bot, CalendarDays, Settings, FileSpreadsheet, Briefcase, AlertCircle, CheckCircle2, UploadCloud, Users, Clock, Zap, ChevronRight, LayoutDashboard, Loader2, PlayCircle, Send, Mail, PenTool } from 'lucide-react';
+import { Bot, CalendarDays, Settings, FileSpreadsheet, Briefcase, AlertCircle, CheckCircle2, UploadCloud, Users, Clock, Zap, ChevronRight, LayoutDashboard, Loader2, PlayCircle, Send, Mail, PenTool, ClipboardList, TerminalSquare } from 'lucide-react';
+import * as XLSX from 'xlsx';
 
 const S = {
   font: "'Inter', 'Pretendard', sans-serif",
@@ -16,14 +17,19 @@ const S = {
 
 export default function App() {
   const [userType, setUserType] = useState('corp'); 
-  const [activeTab, setActiveTab] = useState('send'); // 접속 시 일괄 발송 탭부터 보이도록 설정
+  const [activeTab, setActiveTab] = useState('ai'); // AI 엑셀 파서 탭을 기본으로 설정
   
   const [file, setFile] = useState(null);
+  const [pasteData, setPasteData] = useState('');
   const [processing, setProcessing] = useState(false);
   const [result, setResult] = useState(null);
+  const [sendType, setSendType] = useState(null); 
 
-  // 일괄 발송용 상태
-  const [sendType, setSendType] = useState(null); // 'message' | 'signature'
+  // AI 엑셀 파서용 상태
+  const [excelHeaders, setExcelHeaders] = useState([]);
+  const [excelData, setExcelData] = useState([]);
+  const [aiPrompt, setAiPrompt] = useState('');
+  const [macroResult, setMacroResult] = useState(null);
 
   const calendarData = {
     corp: [
@@ -72,23 +78,52 @@ export default function App() {
 
   const currentCalendar = calendarData[userType];
 
-  const handleFileProcess = () => {
-    if (!file) return;
-    setProcessing(true);
-    setTimeout(() => {
-      setProcessing(false);
-      setResult("AI 데이터 정제 및 처리가 완료되었습니다.");
-    }, 2000);
-  };
-
   const handleSendProcess = (type) => {
     setSendType(type);
     setProcessing(true);
     setTimeout(() => {
       setProcessing(false);
-      if(type === 'message') setResult("총 45명에게 맞춤형 알림톡 및 메일 발송이 완료되었습니다.");
-      if(type === 'signature') setResult("문서(매크로) 자동 작성 및 45명 대상 전자서명 요청이 완료되었습니다.");
+      if(type === 'message') setResult("입력된 대상자들에게 맞춤형 정보 알림톡/메일 발송이 완료되었습니다.");
+      if(type === 'signature') setResult("데이터를 기반으로 문서 자동 작성이 완료되었으며, 대상자들에게 전자서명 요청이 발송되었습니다.");
     }, 2500);
+  };
+
+  // 엑셀 파일 업로드 처리 및 실제 엑셀 화면 렌더링
+  const handleExcelUpload = async (e) => {
+    const uploadedFile = e.target.files[0];
+    if (!uploadedFile) return;
+    setFile(uploadedFile);
+
+    try {
+      const buffer = await uploadedFile.arrayBuffer();
+      const workbook = XLSX.read(buffer, { type: 'array' });
+      const firstSheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[firstSheetName];
+      
+      const json = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+      if (json.length > 0) {
+        setExcelHeaders(json[0]); // 첫 번째 행을 헤더로
+        setExcelData(json.slice(1, 10)); // 최대 9개 행 미리보기
+      }
+    } catch (err) {
+      console.error(err);
+      // 파일을 못 읽었을 때 보여줄 가짜 엑셀 데이터
+      setExcelHeaders(['사번', '이름', '부서', '근속연수', '기본급', '성과급']);
+      setExcelData([
+        ['A001', '김철수', '영업팀', 5, 3000000, 500000],
+        ['A002', '이영희', '개발팀', 3, 3500000, 0],
+        ['A003', '박지훈', '마케팅팀', 1, 2800000, 200000]
+      ]);
+    }
+  };
+
+  const executeMacro = () => {
+    if(!aiPrompt) return;
+    setProcessing(true);
+    setTimeout(() => {
+      setProcessing(false);
+      setMacroResult(`✅ 매크로 생성 및 적용 성공!\n\n요청하신 조건("${aiPrompt}")을 완벽히 인식하여 데이터 전처리 매크로가 생성되었습니다.\n업로드하신 기준을 바탕으로 다수의 엑셀 파일(총 45개)에 일괄 적용이 완료되었습니다.`);
+    }, 3000);
   };
 
   const AutoCard = ({ title, desc, active }) => (
@@ -125,6 +160,15 @@ export default function App() {
         .table { width: 100%; border-collapse: collapse; margin-top: 16px; }
         .table th, .table td { padding: 12px 16px; text-align: left; border-bottom: 1px solid #e2e8f0; font-size: 14px; }
         .table th { color: #64748b; font-weight: 600; background: #f8fafc; }
+        .textarea-input { width: 100%; min-height: 120px; padding: 16px; border: 1px solid #e2e8f0; border-radius: 12px; font-family: inherit; font-size: 14px; resize: vertical; outline: none; transition: border-color 0.2s; }
+        .textarea-input:focus { border-color: #2563eb; }
+        
+        /* 엑셀 테이블 스타일 */
+        .excel-table { width: 100%; border-collapse: collapse; border: 1px solid #cbd5e1; font-size: 13px; background: #fff; }
+        .excel-table th, .excel-table td { border: 1px solid #cbd5e1; padding: 8px 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 150px; }
+        .excel-table th { background: #f1f5f9; color: #475569; font-weight: 600; text-align: center; border-bottom: 2px solid #cbd5e1; }
+        .excel-table .row-num { background: #f1f5f9; color: #64748b; font-weight: 600; text-align: center; width: 40px; border-right: 2px solid #cbd5e1; }
+        .excel-table .header-row td { background: #f8fafc; font-weight: 700; color: #0f172a; }
       `}</style>
 
       {/* Sidebar */}
@@ -145,8 +189,8 @@ export default function App() {
             { id: 'dashboard', icon: <LayoutDashboard size={18}/>, label: '통합 대시보드' },
             { id: 'calendar', icon: <CalendarDays size={18}/>, label: '연간 세무 캘린더' },
             { id: 'automation', icon: <Settings size={18}/>, label: '업무 자동화 설정' },
-            { id: 'ai', icon: <UploadCloud size={18}/>, label: 'AI 엑셀 파서' },
-            { id: 'send', icon: <Send size={18}/>, label: '일괄 발송 및 전자서명' }, // 신규 기능 추가됨
+            { id: 'ai', icon: <UploadCloud size={18}/>, label: 'AI 엑셀 파서 & 매크로' },
+            { id: 'send', icon: <Send size={18}/>, label: '수동문서 자동화 및 일괄발송' }, 
             { id: 'bpo', icon: <Briefcase size={18}/>, label: '전문가 대행 (BPO)' },
           ].map(nav => (
             <div key={nav.id} className={`nav-item ${activeTab === nav.id ? 'active' : ''}`} onClick={() => setActiveTab(nav.id)}>
@@ -169,9 +213,9 @@ export default function App() {
               
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 20, marginBottom: 40 }}>
                 {[
-                  { title: '이번달 신고/이벤트', value: currentCalendar[new Date().getMonth()].events.length + '건', icon: <AlertCircle color={S.danger}/> },
+                  { title: '이번달 발송 건수', value: currentCalendar[new Date().getMonth()].events.length * 10 + '건', icon: <AlertCircle color={S.danger}/> },
                   { title: '절감된 업무 시간', value: '42시간', icon: <Clock color={S.success}/> },
-                  { title: '실행된 자동화', value: '1,204건', icon: <Zap color={S.warning}/> },
+                  { title: '자동화 생성 문서', value: '1,204건', icon: <Zap color={S.warning}/> },
                   { title: '관리 대상', value: userType === 'corp' ? '직원 45명' : (userType === 'proprietor' ? '거래처 12곳' : '수입원 3개'), icon: <Users color={S.accent}/> }
                 ].map((stat, i) => (
                   <div key={i} className="card" style={{ padding: 24, display: 'flex', alignItems: 'center', gap: 16 }}>
@@ -198,42 +242,166 @@ export default function App() {
             </div>
           )}
 
-          {/* 일괄 발송 및 전자서명 (새롭게 추가된 탭) */}
+          {/* AI 엑셀 파서 & 매크로 탭 */}
+          {activeTab === 'ai' && (
+            <div className="fade-in">
+              <h2 style={{ fontSize: 28, fontWeight: 800, marginBottom: 8 }}>AI 엑셀 매크로 생성기</h2>
+              <p style={{ color: S.muted, marginBottom: 24 }}>엑셀 파일을 화면에 띄우고 자연어로 조건을 입력하면, 수십 개의 파일을 한 번에 처리하는 매크로를 즉시 생성합니다.</p>
+              
+              {!file ? (
+                <div className="card" style={{ padding: 48, textAlign: 'center' }}>
+                  <div style={{ border: `2px dashed ${S.accent}`, background: '#eff6ff', padding: '64px 32px', borderRadius: 24, transition: 'all 0.3s' }}>
+                    <UploadCloud size={64} color={S.accent} style={{ margin: '0 auto 24px' }} />
+                    <h3 style={{ fontSize: 20, fontWeight: 700, marginBottom: 12 }}>기준이 될 엑셀 파일을 업로드하세요</h3>
+                    <p style={{ color: S.muted, marginBottom: 24 }}>업로드 즉시 화면에 실제 엑셀과 동일한 그리드가 표시됩니다.</p>
+                    <label style={{ background: S.ink, color: '#fff', padding: '14px 28px', borderRadius: 12, fontWeight: 600, cursor: 'pointer', display: 'inline-block' }}>
+                      엑셀 파일 찾아보기
+                      <input type="file" accept=".xlsx, .xls, .csv" style={{ display: 'none' }} onChange={handleExcelUpload} />
+                    </label>
+                  </div>
+                </div>
+              ) : (
+                <div className="fade-in">
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                      <FileSpreadsheet size={24} color={S.success} /> 
+                      <b style={{ fontSize: 18 }}>{file.name} (미리보기)</b>
+                    </div>
+                    <button onClick={() => { setFile(null); setMacroResult(null); setAiPrompt(''); }} style={{ background: 'none', border: 'none', color: S.danger, cursor: 'pointer', fontWeight: 600 }}>파일 교체</button>
+                  </div>
+
+                  {/* 실제 엑셀 형태의 UI */}
+                  <div className="card" style={{ overflowX: 'auto', marginBottom: 24, borderRadius: 12, border: S.border }}>
+                    <table className="excel-table">
+                      <thead>
+                        <tr>
+                          <th className="row-num"></th>
+                          {excelHeaders.map((_, i) => (
+                            <th key={i}>{String.fromCharCode(65 + i)}</th> // A, B, C, D...
+                          ))}
+                        </tr>
+                        <tr className="header-row">
+                          <td className="row-num">1</td>
+                          {excelHeaders.map((header, i) => (
+                            <td key={i}>{header}</td>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {excelData.map((row, rowIndex) => (
+                          <tr key={rowIndex}>
+                            <td className="row-num">{rowIndex + 2}</td>
+                            {excelHeaders.map((_, colIndex) => (
+                              <td key={colIndex}>{row[colIndex] !== undefined ? row[colIndex] : ''}</td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    {excelData.length > 0 && (
+                      <div style={{ padding: '12px 16px', background: '#f8fafc', borderTop: '1px solid #cbd5e1', fontSize: 13, color: S.muted, textAlign: 'center', fontWeight: 600 }}>
+                        ... 하단 생략 (총 45개 행)
+                      </div>
+                    )}
+                  </div>
+
+                  {/* AI 요청사항 입력 영역 */}
+                  <div className="card" style={{ padding: 32, border: `2px solid ${S.accent}`, background: '#eff6ff' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+                      <TerminalSquare size={24} color={S.accent} />
+                      <h3 style={{ fontSize: 20, fontWeight: 800, margin: 0, color: S.ink }}>어떤 작업을 매크로로 만들까요?</h3>
+                    </div>
+                    <p style={{ color: S.muted, marginBottom: 16, fontSize: 14 }}>엑셀의 알파벳(열)을 기준으로 명령을 내리시면 훨씬 더 정확합니다.</p>
+                    
+                    <textarea 
+                      className="textarea-input" 
+                      placeholder="예시: E열(기본급)과 F열(성과급)을 더한 값을 G열(총지급액)에 계산해서 넣어주고, C열(부서)이 '영업팀'인 사람만 따로 추출해줘."
+                      value={aiPrompt}
+                      onChange={(e) => setAiPrompt(e.target.value)}
+                      style={{ minHeight: '100px', marginBottom: 20, background: '#fff', border: S.border, fontSize: 15 }}
+                    />
+                    
+                    {!macroResult ? (
+                      <button onClick={executeMacro} disabled={processing || !aiPrompt.trim()} style={{ width: '100%', background: aiPrompt.trim() ? S.accent : '#94a3b8', color: '#fff', border: 'none', padding: '16px', borderRadius: 12, fontWeight: 700, fontSize: 16, cursor: (processing || !aiPrompt.trim()) ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, transition: 'all 0.2s' }}>
+                        {processing ? <><Loader2 size={20} style={{ animation: 'spin 1s linear infinite' }} /> AI가 매크로 스크립트를 작성 중입니다...</> : <><Zap size={20} /> 다수 파일에 일괄 적용 (매크로 생성 및 실행)</>}
+                      </button>
+                    ) : (
+                      <div className="fade-in" style={{ padding: 24, background: '#fff', border: `2px solid ${S.success}`, borderRadius: 12 }}>
+                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16 }}>
+                          <CheckCircle2 size={32} color={S.success} />
+                          <div style={{ whiteSpace: 'pre-line', fontSize: 16, color: '#0f172a', fontWeight: 600, lineHeight: 1.6 }}>
+                            {macroResult}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* 수동문서 자동화 및 일괄발송 탭 */}
           {activeTab === 'send' && (
             <div className="fade-in">
-              <h2 style={{ fontSize: 28, fontWeight: 800, marginBottom: 8 }}>일괄 발송 및 문서/전자서명 자동화</h2>
-              <p style={{ color: S.muted, marginBottom: 32 }}>엑셀을 업로드하면 매크로가 문서를 자동 생성하고, 대상자들에게 알림톡 발송 및 전자서명 요청을 일괄 처리합니다.</p>
+              <h2 style={{ fontSize: 28, fontWeight: 800, marginBottom: 8 }}>수동 문서 자동화 및 일괄 발송</h2>
+              <p style={{ color: S.muted, marginBottom: 32 }}>회사에서 전달해야 할 다양한 정보나 정책 동의서 등을 다수에게 일괄 발송하고 자동화하세요.</p>
               
               {!result ? (
                 <div className="card" style={{ padding: 32 }}>
-                  {!file ? (
-                    <div style={{ border: `2px dashed ${S.accent}`, background: '#eff6ff', padding: '64px 32px', borderRadius: 24, textAlign: 'center' }}>
-                      <FileSpreadsheet size={64} color={S.accent} style={{ margin: '0 auto 24px' }} />
-                      <h3 style={{ fontSize: 20, fontWeight: 700, marginBottom: 12 }}>발송 대상자 엑셀 업로드</h3>
-                      <p style={{ color: S.muted, marginBottom: 24 }}>이름, 연락처, 이메일, 근로조건 등이 포함된 명부를 업로드해주세요.</p>
-                      <label style={{ background: S.ink, color: '#fff', padding: '14px 28px', borderRadius: 12, fontWeight: 600, cursor: 'pointer', display: 'inline-block' }}>
-                        엑셀 파일 선택
-                        <input type="file" accept=".xlsx, .xls, .csv" style={{ display: 'none' }} onChange={(e) => { if(e.target.files[0]) setFile(e.target.files[0]); }} />
-                      </label>
+                  {(!file && pasteData.trim() === '') ? (
+                    <div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, marginBottom: 24 }}>
+                        {/* 엑셀 파일 업로드 영역 */}
+                        <div style={{ border: `2px dashed ${S.accent}`, background: '#eff6ff', padding: '40px 24px', borderRadius: 20, textAlign: 'center' }}>
+                          <FileSpreadsheet size={48} color={S.accent} style={{ margin: '0 auto 16px' }} />
+                          <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>발송 대상자 엑셀 업로드</h3>
+                          <p style={{ color: S.muted, fontSize: 13, marginBottom: 16 }}>이름, 연락처, 개별 전달 정보가 포함된 엑셀</p>
+                          <label style={{ background: S.ink, color: '#fff', padding: '10px 20px', borderRadius: 8, fontWeight: 600, cursor: 'pointer', display: 'inline-block', fontSize: 14 }}>
+                            파일 선택하기
+                            <input type="file" accept=".xlsx, .xls, .csv" style={{ display: 'none' }} onChange={(e) => { if(e.target.files[0]) setFile(e.target.files[0]); }} />
+                          </label>
+                        </div>
+
+                        {/* 복사 & 붙여넣기 영역 */}
+                        <div style={{ border: `2px dashed #cbd5e1`, background: '#f8fafc', padding: '40px 24px', borderRadius: 20, display: 'flex', flexDirection: 'column' }}>
+                          <div style={{ textAlign: 'center', marginBottom: 16 }}>
+                            <ClipboardList size={40} color={S.muted} style={{ margin: '0 auto 8px' }} />
+                            <h3 style={{ fontSize: 18, fontWeight: 700, margin: 0 }}>엑셀 리스트 직접 붙여넣기</h3>
+                          </div>
+                          <textarea 
+                            className="textarea-input"
+                            placeholder="엑셀에서 복사한 데이터(Ctrl+C)를 여기에 바로 붙여넣으세요(Ctrl+V)"
+                            value={pasteData}
+                            onChange={(e) => setPasteData(e.target.value)}
+                            style={{ flex: 1, minHeight: '100px' }}
+                          />
+                        </div>
+                      </div>
                     </div>
                   ) : (
                     <div>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, paddingBottom: 16, borderBottom: S.border }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}><FileSpreadsheet size={24} color={S.success} /> <b style={{ fontSize: 18 }}>{file.name} (총 45명 인식됨)</b></div>
-                        <button onClick={() => setFile(null)} style={{ background: 'none', border: 'none', color: S.danger, cursor: 'pointer', fontWeight: 600 }}>파일 다시 선택</button>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                          <CheckCircle2 size={24} color={S.success} /> 
+                          <b style={{ fontSize: 18 }}>
+                            {file ? `${file.name} 업로드 완료` : '엑셀 데이터 붙여넣기 완료'} (대상자 인식됨)
+                          </b>
+                        </div>
+                        <button onClick={() => { setFile(null); setPasteData(''); }} style={{ background: 'none', border: 'none', color: S.danger, cursor: 'pointer', fontWeight: 600 }}>데이터 다시 입력</button>
                       </div>
 
                       <div style={{ marginBottom: 32 }}>
-                        <h4 style={{ fontSize: 16, fontWeight: 700, marginBottom: 16 }}>자동화 액션 선택</h4>
+                        <h4 style={{ fontSize: 16, fontWeight: 700, marginBottom: 16 }}>자동화 매크로 액션 선택</h4>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
                           
                           {/* 1. 문자/메일 발송 */}
                           <div className="card" style={{ padding: 24, border: `2px solid ${sendType === 'message' ? S.accent : 'transparent'}` }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
                               <div style={{ width: 40, height: 40, borderRadius: 12, background: 'rgba(37,99,235,0.1)', color: S.accent, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Mail size={20} /></div>
-                              <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>알림톡/메일 일괄 발송</h3>
+                              <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>전달 정보 일괄 발송</h3>
                             </div>
-                            <p style={{ color: S.muted, fontSize: 14, marginBottom: 24, lineHeight: 1.5 }}>연차 촉진 안내, 복지 공지 등 맞춤형 텍스트를 대상자별로 일괄 발송합니다.</p>
+                            <p style={{ color: S.muted, fontSize: 14, marginBottom: 24, lineHeight: 1.5 }}>급여 명세서, 인사 발령, 복지 안내 등 개별적으로 다른 텍스트를 대상자별로 일괄 발송합니다.</p>
                             <button onClick={() => handleSendProcess('message')} disabled={processing} style={{ width: '100%', background: S.bg, color: S.ink, border: S.border, padding: '12px', borderRadius: 8, fontWeight: 600, cursor: processing ? 'wait' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
                               {processing && sendType === 'message' ? <><Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} /> 발송 중...</> : <><Send size={18} /> 일괄 발송하기</>}
                             </button>
@@ -245,25 +413,14 @@ export default function App() {
                               <div style={{ width: 40, height: 40, borderRadius: 12, background: 'rgba(16,185,129,0.1)', color: S.success, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><PenTool size={20} /></div>
                               <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>문서 자동생성 및 전자서명</h3>
                             </div>
-                            <p style={{ color: S.muted, fontSize: 14, marginBottom: 24, lineHeight: 1.5 }}>데이터를 기반으로 사내 대출/계약 문서를 자동 작성하고 전자서명을 요청합니다.</p>
+                            <p style={{ color: S.muted, fontSize: 14, marginBottom: 24, lineHeight: 1.5 }}>매크로가 규정 변경 동의서, 임금 협약서 등 개별 문서를 자동 생성하고 전자서명을 요청합니다.</p>
                             <button onClick={() => handleSendProcess('signature')} disabled={processing} style={{ width: '100%', background: S.success, color: '#fff', border: 'none', padding: '12px', borderRadius: 8, fontWeight: 600, cursor: processing ? 'wait' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-                              {processing && sendType === 'signature' ? <><Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} /> 생성 및 발송 중...</> : <><PenTool size={18} /> 문서 생성 및 전자서명 요청</>}
+                              {processing && sendType === 'signature' ? <><Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} /> 생성 및 발송 중...</> : <><PenTool size={18} /> 문서 생성 및 서명 요청</>}
                             </button>
                           </div>
 
                         </div>
                       </div>
-
-                      {/* 미리보기 테이블 */}
-                      <h4 style={{ fontSize: 16, fontWeight: 700, marginBottom: 12 }}>발송 대상자 미리보기 (상위 3명)</h4>
-                      <table className="table">
-                        <thead><tr><th>이름</th><th>연락처</th><th>이메일</th><th>처리 상태</th></tr></thead>
-                        <tbody>
-                          <tr><td>김철수</td><td>010-1234-5678</td><td>chulsoo@example.com</td><td><span style={{ color: S.muted }}>대기 중</span></td></tr>
-                          <tr><td>이영희</td><td>010-9876-5432</td><td>younghee@example.com</td><td><span style={{ color: S.muted }}>대기 중</span></td></tr>
-                          <tr><td>박지훈</td><td>010-5555-4444</td><td>jihoon@example.com</td><td><span style={{ color: S.muted }}>대기 중</span></td></tr>
-                        </tbody>
-                      </table>
                     </div>
                   )}
                 </div>
@@ -271,8 +428,8 @@ export default function App() {
                 <div className="card fade-in" style={{ padding: '64px 32px', textAlign: 'center' }}>
                   <CheckCircle2 size={80} color={S.success} style={{ margin: '0 auto 24px' }} />
                   <h2 style={{ fontSize: 24, fontWeight: 800, marginBottom: 16 }}>{result}</h2>
-                  <p style={{ color: S.muted, marginBottom: 32 }}>관리자 대시보드에서 각 인원의 확인/서명 여부를 실시간으로 추적할 수 있습니다.</p>
-                  <button onClick={() => { setResult(null); setFile(null); setSendType(null); }} style={{ background: S.ink, color: '#fff', border: 'none', padding: '12px 24px', borderRadius: 12, fontWeight: 600, cursor: 'pointer' }}>새로운 작업 시작하기</button>
+                  <p style={{ color: S.muted, marginBottom: 32 }}>수동으로 하던 문서 작업이 자동화되었습니다. 대시보드에서 대상자들의 확인/서명 여부를 실시간으로 추적하세요.</p>
+                  <button onClick={() => { setResult(null); setFile(null); setPasteData(''); setSendType(null); }} style={{ background: S.ink, color: '#fff', border: 'none', padding: '12px 24px', borderRadius: 12, fontWeight: 600, cursor: 'pointer' }}>새로운 작업 시작하기</button>
                 </div>
               )}
             </div>
@@ -304,21 +461,21 @@ export default function App() {
           {activeTab === 'automation' && (
             <div className="fade-in">
               <h2 style={{ fontSize: 28, fontWeight: 800, marginBottom: 8 }}>한 번 등록, 평생 자동화</h2>
-              <p style={{ color: S.muted, marginBottom: 32, fontSize: 16 }}>운영이 귀찮았던 사소한 업무들, 시스템에 조건 한 번만 등록해두면 알아서 처리합니다.</p>
+              <p style={{ color: S.muted, marginBottom: 32, fontSize: 16 }}>수동으로 하던 문서 작업이나 고지 안내를, 엑셀과 템플릿만 등록해두면 알아서 처리합니다.</p>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
                 {userType === 'corp' && (
                   <>
-                    <AutoCard title="사내 대출 자동 운영" desc="대출 규정과 한도 계산 로직을 등록하면, 직원 신청 시 AI가 승인 여부와 상환 스케줄을 자동 문서화하여 안내합니다." active={true} />
-                    <AutoCard title="연차 및 의무교육 알림톡" desc="근로자 명부를 기반으로 잔여 연차와 미수료 교육을 파악해 카카오톡 알림톡으로 자동 발송합니다." active={true} />
-                    <AutoCard title="월 급여 명세서 자동 분배" desc="급여 엑셀에서 개별 데이터를 추출하여 각 직원의 카톡으로 암호화된 명세서를 자동 전송합니다." active={false} />
-                    <AutoCard title="신규 입사 자동 온보딩" desc="입사 시 필요한 서류 요청(등본, 통장사본 등), 사내 규정 안내 등을 트리거하여 메일을 발송합니다." active={false} />
+                    <AutoCard title="임금 협상/연봉 계약서 전자서명" desc="급여 데이터만 넣으면 템플릿에 맞게 개별 계약서가 생성되고 전자서명이 일괄 발송됩니다." active={true} />
+                    <AutoCard title="사내 규정 변경 및 정보 안내" desc="직원들에게 바뀐 취업규칙, 법정 의무교육 시청 안내 등을 카카오톡이나 메일로 자동 발송합니다." active={true} />
+                    <AutoCard title="사내 대출 자동 운영 (결재 문서)" desc="대출 규정과 한도 계산 로직을 등록하면, AI가 승인 서류와 상환 스케줄을 자동 문서화합니다." active={true} />
+                    <AutoCard title="신규 입사 서류 자동화" desc="입사 시 필요한 각종 정보 수집과 NDA(비밀유지계약서) 작성 및 서명을 트리거로 자동화합니다." active={false} />
                   </>
                 )}
                 {userType === 'proprietor' && (
                   <>
-                    <AutoCard title="부가가치세 자료 취합" desc="세금계산서, 현금영수증, 카드 매출 내역을 매월 지정된 날짜에 자동 크롤링 및 엑셀로 정리합니다." active={true} />
-                    <AutoCard title="프리랜서 원천징수 안내" desc="지급 내역을 바탕으로 3.3% 공제액을 자동 계산하고 영수증을 프리랜서에게 발송합니다." active={true} />
-                    <AutoCard title="매입/매출 장부 AI 기장" desc="영수증 사진만 올리면 AI가 지출 결의서 형태로 변환하여 장부에 자동 기록합니다." active={false} />
+                    <AutoCard title="프리랜서 원천징수 안내" desc="매월 지급 내역을 바탕으로 공제액을 자동 계산하고 영수증 및 확인 문서를 발송합니다." active={true} />
+                    <AutoCard title="계약 갱신 자동 알림 및 전자서명" desc="거래처와의 계약 만료일을 추적하여, 연장 안내 및 갱신 계약서를 자동으로 띄워줍니다." active={true} />
+                    <AutoCard title="부가가치세 자료 취합 안내" desc="세무 일정에 맞춰 필요한 서류들을 제출하라는 안내를 대상자에게 자동으로 보냅니다." active={false} />
                   </>
                 )}
                 {userType === 'personal' && (
@@ -326,44 +483,6 @@ export default function App() {
                     <AutoCard title="카드 지출 내역 AI 분류" desc="카드사 사용 내역을 올리면 AI가 식비, 교통비, 고정비 등 카테고리별로 자동 분류합니다." active={true} />
                     <AutoCard title="종합소득세 환급 조회 알림" desc="5월 종소세 기간에 맞춰 누락된 공제 항목(통신비, 월세 등)이 없는지 점검하고 알림을 줍니다." active={false} />
                   </>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* AI Parser Tab */}
-          {activeTab === 'ai' && (
-            <div className="fade-in">
-              <h2 style={{ fontSize: 28, fontWeight: 800, marginBottom: 8 }}>AI 엑셀 파서 & 데이터 수직화</h2>
-              <p style={{ color: S.muted, marginBottom: 32 }}>양식이 제각각인 문서나 복잡한 데이터를 업로드하면 AI가 분석하여 표준 데이터로 정제합니다.</p>
-              
-              <div className="card" style={{ padding: 48, textAlign: 'center', maxWidth: 700, margin: '0 auto' }}>
-                {!result ? (
-                  <>
-                    <div style={{ border: `2px dashed ${file ? S.success : S.accent}`, background: file ? '#f0fdf4' : '#eff6ff', padding: '64px 32px', borderRadius: 24, transition: 'all 0.3s' }}>
-                      <UploadCloud size={64} color={file ? S.success : S.accent} style={{ margin: '0 auto 24px' }} />
-                      <h3 style={{ fontSize: 20, fontWeight: 700, marginBottom: 12 }}>작업할 문서를 선택하세요</h3>
-                      <p style={{ color: S.muted, marginBottom: 24 }}>연차 내역, 급여 대장, 카드 사용 내역 등 아무 엑셀이나 상관없습니다.</p>
-                      <label style={{ background: S.ink, color: '#fff', padding: '14px 28px', borderRadius: 12, fontWeight: 600, cursor: 'pointer', display: 'inline-block' }}>
-                        파일 찾아보기
-                        <input type="file" accept=".xlsx, .xls, .csv" style={{ display: 'none' }} onChange={(e) => { if(e.target.files[0]) setFile(e.target.files[0]); }} />
-                      </label>
-                    </div>
-                    {file && (
-                      <div style={{ marginTop: 24, padding: 20, background: '#f8fafc', borderRadius: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: S.border }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}><FileSpreadsheet size={24} color={S.success} /> <b>{file.name}</b></div>
-                        <button onClick={handleFileProcess} disabled={processing} style={{ background: S.accent, color: '#fff', border: 'none', padding: '12px 24px', borderRadius: 8, fontWeight: 600, cursor: processing ? 'wait' : 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>
-                          {processing ? <><Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} /> 분석 중...</> : <><PlayCircle size={18} /> AI 파싱 시작</>}
-                        </button>
-                      </div>
-                    )}
-                  </>
-                ) : (
-                  <div style={{ padding: '40px 0' }}>
-                    <CheckCircle2 size={80} color={S.success} style={{ margin: '0 auto 24px' }} />
-                    <h2 style={{ fontSize: 24, fontWeight: 800, marginBottom: 16 }}>{result}</h2>
-                    <button onClick={() => { setResult(null); setFile(null); }} style={{ background: S.ink, color: '#fff', border: 'none', padding: '12px 24px', borderRadius: 12, fontWeight: 600, cursor: 'pointer' }}>새로운 파일 작업하기</button>
-                  </div>
                 )}
               </div>
             </div>
