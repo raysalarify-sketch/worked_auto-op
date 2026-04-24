@@ -1,8 +1,5 @@
 import React, { useState } from 'react';
 import { Bot, CalendarDays, Settings, FileSpreadsheet, Briefcase, AlertCircle, CheckCircle2, UploadCloud, Users, Clock, Zap, ChevronRight, LayoutDashboard, Loader2, PlayCircle } from 'lucide-react';
-import * as XLSX from 'xlsx';
-import { supabase } from './lib/supabase';
-import { analyzeExcelData } from './lib/gemini';
 
 const S = {
   font: "'Inter', 'Pretendard', sans-serif",
@@ -18,10 +15,9 @@ const S = {
 };
 
 export default function App() {
-  const [userType, setUserType] = useState('corp'); // 'personal', 'proprietor', 'corp'
+  const [userType, setUserType] = useState('corp'); 
   const [activeTab, setActiveTab] = useState('dashboard');
   
-  // AI Parser State
   const [file, setFile] = useState(null);
   const [processing, setProcessing] = useState(false);
   const [result, setResult] = useState(null);
@@ -73,28 +69,14 @@ export default function App() {
 
   const currentCalendar = calendarData[userType];
 
-  const handleFileProcess = async () => {
+  const handleFileProcess = () => {
     if (!file) return;
     setProcessing(true);
-    try {
-      const data = await file.arrayBuffer();
-      const workbook = XLSX.read(data);
-      const jsonData = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
-      
-      let aiResult;
-      try {
-        aiResult = await analyzeExcelData(jsonData);
-      } catch(e) {
-        aiResult = { status: "Success", rows: jsonData.length, message: "AI 모방 로직 처리 완료" };
-      }
-
-      await supabase.from('processed_data').insert([{ task_type: 'AI Parser', original_filename: file.name, ai_processed_data: aiResult }]);
+    // 임시 모의 지연 (백엔드 연동 전까지 UI 테스트용)
+    setTimeout(() => {
       setProcessing(false);
-      setResult("AI 데이터 정제 및 DB 저장이 완료되었습니다.");
-    } catch (err) {
-      setProcessing(false);
-      setResult("임시 처리 완료 (Supabase/Gemini 에러 무시)");
-    }
+      setResult("AI 데이터 정제 및 처리가 완료되었습니다.");
+    }, 2000);
   };
 
   const AutoCard = ({ title, desc, active }) => (
