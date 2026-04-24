@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Bot, CalendarDays, Settings, FileSpreadsheet, Briefcase, AlertCircle, CheckCircle2, UploadCloud, Users, Clock, Zap, ChevronRight, LayoutDashboard, Loader2, PlayCircle } from 'lucide-react';
+import { Bot, CalendarDays, Settings, FileSpreadsheet, Briefcase, AlertCircle, CheckCircle2, UploadCloud, Users, Clock, Zap, ChevronRight, LayoutDashboard, Loader2, PlayCircle, Send, Mail, PenTool } from 'lucide-react';
 
 const S = {
   font: "'Inter', 'Pretendard', sans-serif",
@@ -16,11 +16,14 @@ const S = {
 
 export default function App() {
   const [userType, setUserType] = useState('corp'); 
-  const [activeTab, setActiveTab] = useState('dashboard');
+  const [activeTab, setActiveTab] = useState('send'); // 접속 시 일괄 발송 탭부터 보이도록 설정
   
   const [file, setFile] = useState(null);
   const [processing, setProcessing] = useState(false);
   const [result, setResult] = useState(null);
+
+  // 일괄 발송용 상태
+  const [sendType, setSendType] = useState(null); // 'message' | 'signature'
 
   const calendarData = {
     corp: [
@@ -72,11 +75,20 @@ export default function App() {
   const handleFileProcess = () => {
     if (!file) return;
     setProcessing(true);
-    // 임시 모의 지연 (백엔드 연동 전까지 UI 테스트용)
     setTimeout(() => {
       setProcessing(false);
       setResult("AI 데이터 정제 및 처리가 완료되었습니다.");
     }, 2000);
+  };
+
+  const handleSendProcess = (type) => {
+    setSendType(type);
+    setProcessing(true);
+    setTimeout(() => {
+      setProcessing(false);
+      if(type === 'message') setResult("총 45명에게 맞춤형 알림톡 및 메일 발송이 완료되었습니다.");
+      if(type === 'signature') setResult("문서(매크로) 자동 작성 및 45명 대상 전자서명 요청이 완료되었습니다.");
+    }, 2500);
   };
 
   const AutoCard = ({ title, desc, active }) => (
@@ -110,6 +122,9 @@ export default function App() {
         .segment-container { display: flex; background: #f1f5f9; margin: 20px 16px; border-radius: 12px; padding: 4px; }
         .segment-btn { flex: 1; padding: 8px 0; text-align: center; font-size: 13px; font-weight: 700; cursor: pointer; border-radius: 8px; color: #64748b; transition: all 0.2s; }
         .segment-btn.active { background: #fff; color: #2563eb; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        .table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+        .table th, .table td { padding: 12px 16px; text-align: left; border-bottom: 1px solid #e2e8f0; font-size: 14px; }
+        .table th { color: #64748b; font-weight: 600; background: #f8fafc; }
       `}</style>
 
       {/* Sidebar */}
@@ -131,6 +146,7 @@ export default function App() {
             { id: 'calendar', icon: <CalendarDays size={18}/>, label: '연간 세무 캘린더' },
             { id: 'automation', icon: <Settings size={18}/>, label: '업무 자동화 설정' },
             { id: 'ai', icon: <UploadCloud size={18}/>, label: 'AI 엑셀 파서' },
+            { id: 'send', icon: <Send size={18}/>, label: '일괄 발송 및 전자서명' }, // 신규 기능 추가됨
             { id: 'bpo', icon: <Briefcase size={18}/>, label: '전문가 대행 (BPO)' },
           ].map(nav => (
             <div key={nav.id} className={`nav-item ${activeTab === nav.id ? 'active' : ''}`} onClick={() => setActiveTab(nav.id)}>
@@ -182,6 +198,86 @@ export default function App() {
             </div>
           )}
 
+          {/* 일괄 발송 및 전자서명 (새롭게 추가된 탭) */}
+          {activeTab === 'send' && (
+            <div className="fade-in">
+              <h2 style={{ fontSize: 28, fontWeight: 800, marginBottom: 8 }}>일괄 발송 및 문서/전자서명 자동화</h2>
+              <p style={{ color: S.muted, marginBottom: 32 }}>엑셀을 업로드하면 매크로가 문서를 자동 생성하고, 대상자들에게 알림톡 발송 및 전자서명 요청을 일괄 처리합니다.</p>
+              
+              {!result ? (
+                <div className="card" style={{ padding: 32 }}>
+                  {!file ? (
+                    <div style={{ border: `2px dashed ${S.accent}`, background: '#eff6ff', padding: '64px 32px', borderRadius: 24, textAlign: 'center' }}>
+                      <FileSpreadsheet size={64} color={S.accent} style={{ margin: '0 auto 24px' }} />
+                      <h3 style={{ fontSize: 20, fontWeight: 700, marginBottom: 12 }}>발송 대상자 엑셀 업로드</h3>
+                      <p style={{ color: S.muted, marginBottom: 24 }}>이름, 연락처, 이메일, 근로조건 등이 포함된 명부를 업로드해주세요.</p>
+                      <label style={{ background: S.ink, color: '#fff', padding: '14px 28px', borderRadius: 12, fontWeight: 600, cursor: 'pointer', display: 'inline-block' }}>
+                        엑셀 파일 선택
+                        <input type="file" accept=".xlsx, .xls, .csv" style={{ display: 'none' }} onChange={(e) => { if(e.target.files[0]) setFile(e.target.files[0]); }} />
+                      </label>
+                    </div>
+                  ) : (
+                    <div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, paddingBottom: 16, borderBottom: S.border }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}><FileSpreadsheet size={24} color={S.success} /> <b style={{ fontSize: 18 }}>{file.name} (총 45명 인식됨)</b></div>
+                        <button onClick={() => setFile(null)} style={{ background: 'none', border: 'none', color: S.danger, cursor: 'pointer', fontWeight: 600 }}>파일 다시 선택</button>
+                      </div>
+
+                      <div style={{ marginBottom: 32 }}>
+                        <h4 style={{ fontSize: 16, fontWeight: 700, marginBottom: 16 }}>자동화 액션 선택</h4>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+                          
+                          {/* 1. 문자/메일 발송 */}
+                          <div className="card" style={{ padding: 24, border: `2px solid ${sendType === 'message' ? S.accent : 'transparent'}` }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+                              <div style={{ width: 40, height: 40, borderRadius: 12, background: 'rgba(37,99,235,0.1)', color: S.accent, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Mail size={20} /></div>
+                              <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>알림톡/메일 일괄 발송</h3>
+                            </div>
+                            <p style={{ color: S.muted, fontSize: 14, marginBottom: 24, lineHeight: 1.5 }}>연차 촉진 안내, 복지 공지 등 맞춤형 텍스트를 대상자별로 일괄 발송합니다.</p>
+                            <button onClick={() => handleSendProcess('message')} disabled={processing} style={{ width: '100%', background: S.bg, color: S.ink, border: S.border, padding: '12px', borderRadius: 8, fontWeight: 600, cursor: processing ? 'wait' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                              {processing && sendType === 'message' ? <><Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} /> 발송 중...</> : <><Send size={18} /> 일괄 발송하기</>}
+                            </button>
+                          </div>
+
+                          {/* 2. 전자서명 발송 */}
+                          <div className="card" style={{ padding: 24, border: `2px solid ${sendType === 'signature' ? S.success : 'transparent'}` }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+                              <div style={{ width: 40, height: 40, borderRadius: 12, background: 'rgba(16,185,129,0.1)', color: S.success, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><PenTool size={20} /></div>
+                              <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>문서 자동생성 및 전자서명</h3>
+                            </div>
+                            <p style={{ color: S.muted, fontSize: 14, marginBottom: 24, lineHeight: 1.5 }}>데이터를 기반으로 사내 대출/계약 문서를 자동 작성하고 전자서명을 요청합니다.</p>
+                            <button onClick={() => handleSendProcess('signature')} disabled={processing} style={{ width: '100%', background: S.success, color: '#fff', border: 'none', padding: '12px', borderRadius: 8, fontWeight: 600, cursor: processing ? 'wait' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                              {processing && sendType === 'signature' ? <><Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} /> 생성 및 발송 중...</> : <><PenTool size={18} /> 문서 생성 및 전자서명 요청</>}
+                            </button>
+                          </div>
+
+                        </div>
+                      </div>
+
+                      {/* 미리보기 테이블 */}
+                      <h4 style={{ fontSize: 16, fontWeight: 700, marginBottom: 12 }}>발송 대상자 미리보기 (상위 3명)</h4>
+                      <table className="table">
+                        <thead><tr><th>이름</th><th>연락처</th><th>이메일</th><th>처리 상태</th></tr></thead>
+                        <tbody>
+                          <tr><td>김철수</td><td>010-1234-5678</td><td>chulsoo@example.com</td><td><span style={{ color: S.muted }}>대기 중</span></td></tr>
+                          <tr><td>이영희</td><td>010-9876-5432</td><td>younghee@example.com</td><td><span style={{ color: S.muted }}>대기 중</span></td></tr>
+                          <tr><td>박지훈</td><td>010-5555-4444</td><td>jihoon@example.com</td><td><span style={{ color: S.muted }}>대기 중</span></td></tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="card fade-in" style={{ padding: '64px 32px', textAlign: 'center' }}>
+                  <CheckCircle2 size={80} color={S.success} style={{ margin: '0 auto 24px' }} />
+                  <h2 style={{ fontSize: 24, fontWeight: 800, marginBottom: 16 }}>{result}</h2>
+                  <p style={{ color: S.muted, marginBottom: 32 }}>관리자 대시보드에서 각 인원의 확인/서명 여부를 실시간으로 추적할 수 있습니다.</p>
+                  <button onClick={() => { setResult(null); setFile(null); setSendType(null); }} style={{ background: S.ink, color: '#fff', border: 'none', padding: '12px 24px', borderRadius: 12, fontWeight: 600, cursor: 'pointer' }}>새로운 작업 시작하기</button>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Calendar Tab */}
           {activeTab === 'calendar' && (
             <div className="fade-in">
@@ -189,9 +285,6 @@ export default function App() {
                 <div>
                   <h2 style={{ fontSize: 28, fontWeight: 800, margin: '0 0 8px 0' }}>연간 세무·신고 캘린더</h2>
                   <p style={{ color: S.muted, margin: 0 }}>빨간색으로 표시된 월은 가산세 위험이 있는 필수 신고의 달입니다.</p>
-                </div>
-                <div style={{ display: 'flex', gap: 16 }}>
-                  <span style={{ fontSize: 14, display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600 }}><div style={{width:10, height:10, borderRadius:'50%', background:S.danger}}/> 가산세 위험 구간</span>
                 </div>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
@@ -269,7 +362,6 @@ export default function App() {
                   <div style={{ padding: '40px 0' }}>
                     <CheckCircle2 size={80} color={S.success} style={{ margin: '0 auto 24px' }} />
                     <h2 style={{ fontSize: 24, fontWeight: 800, marginBottom: 16 }}>{result}</h2>
-                    <p style={{ color: S.muted, marginBottom: 32 }}>추출된 데이터가 표준화되었으며, 연동된 DB에 안전하게 저장되었습니다.</p>
                     <button onClick={() => { setResult(null); setFile(null); }} style={{ background: S.ink, color: '#fff', border: 'none', padding: '12px 24px', borderRadius: 12, fontWeight: 600, cursor: 'pointer' }}>새로운 파일 작업하기</button>
                   </div>
                 )}
